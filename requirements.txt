@@ -1,0 +1,11 @@
+runpod==1.7.0
+accelerate>=0.34.2
+safetensors>=0.4.5
+diffusers==0.35.1
+transformers==4.46.3
+huggingface-hub>=0.24.6
+pillow>=10.3.0
+numpy>=1.26.4
+fastapi>=0.112.0
+uvicorn>=0.30.0
+hf_transfer

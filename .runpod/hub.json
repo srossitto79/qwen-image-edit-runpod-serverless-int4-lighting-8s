@@ -1,0 +1,47 @@
+{
+  "title": "Qwen-Image-Edit Lighting (Nunchaku) — Serverless",
+  "description": "Image editing using Qwen-Image-Edit with Nunchaku-quantized transformer embedded in the container. Accepts URL or base64 image and returns base64 output.",
+  "type": "serverless",
+  "category": "image",
+  "iconUrl": "https://huggingface.co/datasets/nunchaku-tech/cdn/resolve/main/nunchaku/assets/qwen-image.jpg",
+  "config": {
+    "runsOn": "GPU",
+    "containerDiskInGb": 20,
+    "gpuCount": 1,
+    "gpuIds": "RTX A4000,RTX 6000 Ada,NVIDIA GeForce RTX 4090",
+    "allowedCudaVersions": ["12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2", "12.1", "12.0"],
+    "presets": [
+      {
+        "name": "Default (INT4 r128)",
+        "defaults": {
+          "DEFAULT_STEPS": 30,
+          "DEFAULT_SCALE": 4.0
+        }
+      }
+    ],
+    "env": [
+      {
+        "key": "DEFAULT_STEPS",
+        "input": {
+          "name": "Default steps",
+          "type": "number",
+          "description": "Default num_inference_steps when not provided",
+          "min": 1,
+          "max": 200,
+          "default": 8
+        }
+      },
+      {
+        "key": "DEFAULT_SCALE",
+        "input": {
+          "name": "Default true CFG scale",
+          "type": "number",
+          "description": "Default true_cfg_scale when not provided",
+          "min": 0,
+          "max": 15,
+          "default": 4
+        }
+      }
+    ]
+  }
+}

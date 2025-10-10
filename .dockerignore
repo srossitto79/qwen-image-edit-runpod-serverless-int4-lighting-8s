@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+.env
+
+# Git
+.git/
+.gitignore
+
+# Data and cache
+cache/
+outputs/
+wandb/
+logs/
+/tmp/
+*.log
+
+# Node
+node_modules/
+
+# VSCode
+.vscode/
+
+# Model weights (we embed via Dockerfile)
+models/
