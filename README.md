@@ -2,7 +2,7 @@
 
 This repository packages a Runpod Serverless worker that performs image editing using Qwen-Image-Edit with Nunchaku-quantized transformer weights embedded inside the Docker image (<= 20GB).
 
-- Model: Qwen/Qwen-Image-Edit (Diffusers pipeline) + Nunchaku quantized transformer (INT4/FP4, rank selectable)
+- Model: Qwen/Qwen-Image-Edit (Diffusers pipeline) + Nunchaku quantized transformer (INT4/FP4, rank selectable) + Lighting 8steps lora
 - Runtime: Python worker using Runpod serverless
 - Input: image (URL or base64), prompt, negative_prompt (optional), steps, scale
 - Output: base64-encoded edited image
@@ -13,7 +13,7 @@ This repository packages a Runpod Serverless worker that performs image editing 
   - Either an http(s) URL to an image, or a data URL / base64-encoded PNG/JPEG.
 - prompt: string (required)
 - negative_prompt: string (optional; default " ")
-- num_inference_steps: int (optional; default 30)
+- num_inference_steps: int (optional; default 8)
 - true_cfg_scale: float (optional; default 4.0)
 - width: int (optional)
 - height: int (optional)
