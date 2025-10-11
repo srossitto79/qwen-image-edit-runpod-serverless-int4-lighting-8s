@@ -19,7 +19,7 @@ MODELS_DIR = os.getenv("MODELS_DIR", "/models")
 PIPELINE_DIR = os.path.join(MODELS_DIR, "Qwen-Image-Edit")  # diffusers pipeline
 TRANSFORMER_PATH = os.path.join(MODELS_DIR, "transformer.safetensors")  # nunchaku quantized
 
-DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "30"))
+DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "8"))
 DEFAULT_SCALE = float(os.getenv("DEFAULT_SCALE", "4.0"))
 DEFAULT_RANK = int(os.getenv("DEFAULT_RANK", "32"))  # informational only; used at build time
 

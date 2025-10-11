@@ -5,7 +5,9 @@
       "input": {
         "image": "https://huggingface.co/datasets/nunchaku-tech/test-data/resolve/main/inputs/neon_sign.png",
         "prompt": "change the text to read 'Runpod'",
-        "num_inference_steps": 10
+        "negative_prompt": "",
+        "num_inference_steps": 10,
+        "true_cfg_scale": 4.0
       },
       "timeout": 600000
     }
