@@ -97,6 +97,9 @@ def read_image(source: str) -> Image.Image:
     try:
         data = base64.b64decode(base64_str)
         img = Image.open(io.BytesIO(data)).convert("RGB")
+        max_pixels = 1024 * 1024
+        if img.width * img.height > max_pixels:
+            img.thumbnail((1024, 1024), Image.ANTIALIAS)
         return img
     except Exception as e:
         raise ValueError(f"Failed to decode image input: {e}")
@@ -147,4 +150,18 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    runpod.serverless.start({"handler": handler})
+    if os.getenv("RUNPOD_LOCAL_TEST"):
+        from fastapi import FastAPI
+        import uvicorn
+
+        app = FastAPI()
+
+        @app.post("/")
+        async def run_job(job: dict):
+            return handler(job)
+
+        port = int(os.getenv("RP_PORT", "3000"))
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    else:
+        # Start runpod serverless handler
+        runpod.serverless.start({"handler": handler})

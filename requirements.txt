@@ -9,3 +9,5 @@ numpy>=1.26.4
 fastapi>=0.112.0
 uvicorn>=0.30.0
 hf_transfer
+fastapi
+uvicorn

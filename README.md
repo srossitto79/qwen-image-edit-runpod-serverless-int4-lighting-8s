@@ -49,6 +49,18 @@ curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
 
 The response will contain a base64 field with the edited image.
 
+## Build variants
+
+By default, the image embeds a compact single-file text encoder from Comfy-Org to keep size reasonable. You can instead use the original sharded text encoder from the upstream pipeline (significantly larger) by passing a build-arg:
+
+```cmd
+docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=true -t qwen-image-edit-serverless:orig-te .
+```
+
+Notes:
+- When USE_ORIGINAL_TEXT_ENCODER=true, the Dockerfile fetches the sharded text encoder files (model.safetensors.index.json + shard parts) under models/Qwen-Image-Edit/text_encoder/.
+- When false (default), it pulls a compact single-file encoder from Comfy-Org/Qwen-Image_ComfyUI and removes any stale shard files.
+
 ## Publishing to Runpod Hub
 
 - Ensure `.runpod/hub.json` and `.runpod/tests.json` are set.

@@ -35,13 +35,18 @@ RUN mkdir -p ${MODELS_DIR}
 # 2) Download Nunchaku quantized transformer safetensors file
 # We select INT4 rank-32 to keep size small; adjust if needed.
 ARG RANK=128
-ARG NUNCHAKU_REPO="nunchaku-tech/nunchaku-qwen-image-edit"
-ARG TRANSFORMER_FILE="svdq-int4_r${RANK}-qwen-image-edit-lightningv1.0-8steps.safetensors"
-#ARG TRANSFORMER_FILE="svdq-int4_r${RANK}-qwen-image-edit.safetensors"
+ARG LIGHTING=8
+ARG USE_ORIGINAL_TEXT_ENCODER="true"
+
+# Make the build-args available to the Python step below
+ENV RANK=${RANK}
+ENV LIGHTING=${LIGHTING}
+ENV USE_ORIGINAL_TEXT_ENCODER=${USE_ORIGINAL_TEXT_ENCODER}
 
 # Use huggingface_hub to download to a local dir under /models (minimize files pulled)
 RUN python3 - <<'PY'
 import os
+import shutil
 from huggingface_hub import snapshot_download, hf_hub_download
 models_dir = os.environ.get('MODELS_DIR','/models')
 # Download diffusers pipeline snapshot
@@ -69,30 +74,70 @@ if not os.path.exists(pipe_dir):
         local_dir=pipe_dir,
         allow_patterns=allow,
     )
-# Download nunchaku quantized transformer
+# Download nunchaku quantized transformer (derived only from RANK and LIGHTING)
 trans_path = os.path.join(models_dir, 'transformer.safetensors')
-repo = os.environ.get('NUNCHAKU_REPO','nunchaku-tech/nunchaku-qwen-image-edit')
-filename = os.environ.get('TRANSFORMER_FILE','svdq-int4_r128-qwen-image-edit.safetensors')
+rank_env = os.environ.get('RANK', '128')
+try:
+    rank = int(rank_env)
+except Exception:
+    rank = 128
+lighting = os.environ.get('LIGHTING', 'NONE').strip().lower()
+if lighting == '8':
+    filename = f"svdq-int4_r{rank}-qwen-image-edit-lightningv1.0-8steps.safetensors"
+elif lighting == '4':
+    filename = f"svdq-int4_r{rank}-qwen-image-edit-lightningv1.0-4steps.safetensors"
+else:
+    filename = f"svdq-int4_r{rank}-qwen-image-edit.safetensors"
+repo = 'nunchaku-tech/nunchaku-qwen-image-edit'
 fp = hf_hub_download(repo_id=repo, filename=filename)
-import shutil; shutil.copy(fp, trans_path)
+shutil.copy(fp, trans_path)
 print('Downloaded pipeline to', pipe_dir)
 print('Downloaded transformer to', trans_path)
 te_dir = os.path.join(pipe_dir, 'text_encoder')
 os.makedirs(te_dir, exist_ok=True)
-# Choose a compact single-file text encoder from Comfy-Org (16-bit by default)
-te_repo = os.environ.get('TE_REPO', 'Comfy-Org/Qwen-Image_ComfyUI')
-te_file = os.environ.get('TE_FILE', 'split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors')
-te_src = hf_hub_download(repo_id=te_repo, filename=te_file)
-import shutil as _shutil; _shutil.copy(te_src, os.path.join(te_dir, 'model.safetensors'))
-# Ensure no stale index references shards; remove if exists
-idx = os.path.join(te_dir, 'model.safetensors.index.json')
-try:
+use_original = os.environ.get('USE_ORIGINAL_TEXT_ENCODER', 'false').lower() in ('1','true','yes','y')
+if use_original:
+    # Fetch original sharded text encoder (index + shard files) into pipe_dir
+    snapshot_download(
+        repo_id='Qwen/Qwen-Image-Edit',
+        local_dir=pipe_dir,
+        allow_patterns=[
+            'text_encoder/model.safetensors.index.json',
+            'text_encoder/model-*.safetensors',
+        ],
+    )
+    # If a single-file encoder exists from a previous build layer, remove it to avoid ambiguity
+    single = os.path.join(te_dir, 'model.safetensors')
+    if os.path.exists(single):
+        try:
+            os.remove(single)
+            print('Removed single-file text encoder:', single)
+        except Exception as e:
+            print('Warn: could not remove single-file encoder:', e)
+    print('Using original sharded text encoder under', te_dir)
+else:
+    # Choose a compact single-file text encoder from Comfy-Org (16-bit by default)
+    te_repo = 'Comfy-Org/Qwen-Image_ComfyUI'
+    te_file = 'split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors'
+    te_src = hf_hub_download(repo_id=te_repo, filename=te_file)
+    shutil.copy(te_src, os.path.join(te_dir, 'model.safetensors'))
+    # Ensure no stale index references shards; remove if exists
+    idx = os.path.join(te_dir, 'model.safetensors.index.json')
     if os.path.exists(idx):
-        os.remove(idx)
-        print('Removed stale index file:', idx)
-except Exception as _e:
-    print('Warn: could not remove index file:', _e)
-print('Downloaded text encoder to', os.path.join(te_dir, 'model.safetensors'))
+        try:
+            os.remove(idx)
+            print('Removed stale index file:', idx)
+        except Exception as _e:
+            print('Warn: could not remove index file:', _e)
+    # Remove any stray shard files to avoid accidental loading of sharded weights
+    for _n in os.listdir(te_dir):
+        if _n.startswith('model.safetensors-') and _n.endswith('.safetensors'):
+            try:
+                os.remove(os.path.join(te_dir, _n))
+                print('Removed stale shard:', _n)
+            except Exception as _e:
+                print('Warn: could not remove shard', _n, ':', _e)
+    print('Downloaded compact single-file text encoder to', os.path.join(te_dir, 'model.safetensors'))
 PY
 
 # Repack large text encoders in FP16 to reduce on-disk size
