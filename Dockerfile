@@ -175,9 +175,6 @@ ENV TRANSFORMERS_OFFLINE=1 \
 
 # Copy source
 COPY handler.py ./
-COPY .runpod ./
-COPY README.md ./
-COPY .dockerignore ./
 
 # Expose server port
 ENV RP_HANDLER=handler \
