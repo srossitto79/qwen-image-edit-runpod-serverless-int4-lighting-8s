@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libglib2.0-0 libsm6 libxext6 libxrender1 \
+    ca-certificates libglib2.0-0 libsm6 libxext6 libxrender1 git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first (leverage layer cache)
