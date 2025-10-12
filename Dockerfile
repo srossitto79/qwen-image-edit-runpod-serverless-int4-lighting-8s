@@ -16,15 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python deps first (leverage layer cache)
 WORKDIR /app
 COPY requirements.txt ./
-RUN python3 -m pip install --upgrade pip setuptools wheel \
- && python3 -m pip install -r requirements.txt
+RUN python3 -m pip install --no-cache-dir  --upgrade pip setuptools wheel \
+ && python3 -m pip install --no-cache-dir  -r requirements.txt
 
 # Install Nunchaku prebuilt wheel compatible with Torch 2.6 and Python 3.10
 # Note: adjust the URL if Nunchaku updates the artifact naming.
-RUN python3 -m pip install \
+RUN python3 -m pip install --no-cache-dir  \
     https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.6-cp310-cp310-linux_x86_64.whl
 
-RUN pip install --upgrade runpod
+RUN pip install --no-cache-dir  --upgrade runpod
 
 # Prepare model directories
 ENV MODELS_DIR=/models
@@ -140,8 +140,35 @@ else:
     print('Downloaded compact single-file text encoder to', os.path.join(te_dir, 'model.safetensors'))
 PY
 
-# Repack large text encoders in FP16 to reduce on-disk size
-# FP16 repack no longer needed; we install a compact, single-file text encoder directly.
+RUN python3 - <<'PY'
+from safetensors import safe_open, safe_save
+import os, torch, tempfile
+
+def compress(path):
+    if not os.path.exists(path): return
+    tensors = {}
+    with safe_open(path, framework="pt") as f:
+        for k in f.keys():
+            tensors[k] = f.get_tensor(k)
+    tmp = tempfile.mktemp(suffix=".safetensors")
+    safe_save(tensors, tmp, metadata={"compression": "zstd"})
+    os.replace(tmp, path)
+    print("Compressed", path)
+
+for root, _, files in os.walk("/models"):
+    for f in files:
+        if f.endswith(".safetensors"):
+            compress(os.path.join(root, f))
+PY
+
+RUN rm -rf /root/.cache/pip \
+ && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+ && find /models -type d -name ".git" -exec rm -rf {} + \
+ && find /models -type f \( -name "*.msgpack" -o -name "*.parquet" -o -name "*.h5" -o -name "*.bin" \) -delete \
+ && find /usr/local/lib/python3.10 -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete \
+ && find /usr/local/lib/python3.10 -type d -name "__pycache__" -exec rm -rf {} + \
+ && strip --strip-unneeded $(find /usr/local/lib -type f -name "*.so" 2>/dev/null || true) || true \
+ && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 # Copy source
 COPY handler.py ./
