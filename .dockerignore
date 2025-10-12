@@ -28,3 +28,15 @@ node_modules/
 
 # Model weights (we embed via Dockerfile)
 models/
+
+# Local artifacts and media not needed in image
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+test_*
+*.ipynb
+.runpod/
+pool_result_*.png
+result*.png

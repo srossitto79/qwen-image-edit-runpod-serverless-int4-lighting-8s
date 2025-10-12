@@ -5,26 +5,25 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     FORCE_CUDA=1 \
     HF_HUB_ENABLE_HF_TRANSFER=1
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git wget ca-certificates libglib2.0-0 libsm6 libxext6 libxrender1 \
+    ca-certificates libglib2.0-0 libsm6 libxext6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first (leverage layer cache)
 WORKDIR /app
 COPY requirements.txt ./
-RUN python3 -m pip install --no-cache-dir  --upgrade pip setuptools wheel \
- && python3 -m pip install --no-cache-dir  -r requirements.txt
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+ && python3 -m pip install --no-cache-dir --no-compile -r requirements.txt
 
 # Install Nunchaku prebuilt wheel compatible with Torch 2.6 and Python 3.10
 # Note: adjust the URL if Nunchaku updates the artifact naming.
-RUN python3 -m pip install --no-cache-dir  \
+RUN python3 -m pip install --no-cache-dir --no-deps \
     https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.6-cp310-cp310-linux_x86_64.whl
-
-RUN pip install --no-cache-dir  --upgrade runpod
 
 # Prepare model directories
 ENV MODELS_DIR=/models
@@ -165,10 +164,14 @@ RUN rm -rf /root/.cache/pip \
  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
  && find /models -type d -name ".git" -exec rm -rf {} + \
  && find /models -type f \( -name "*.msgpack" -o -name "*.parquet" -o -name "*.h5" -o -name "*.bin" \) -delete \
- && find /usr/local/lib/python3.10 -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete \
- && find /usr/local/lib/python3.10 -type d -name "__pycache__" -exec rm -rf {} + \
+ && (find /usr/local/lib/python3.10 -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete 2>/dev/null || true) \
+ && (find /usr/local/lib/python3.10 -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true) \
  && strip --strip-unneeded $(find /usr/local/lib -type f -name "*.so" 2>/dev/null || true) || true \
  && rm -rf /root/.cache /tmp/* /var/tmp/*
+
+# Force offline usage at runtime to avoid accidental downloads
+ENV TRANSFORMERS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1
 
 # Copy source
 COPY handler.py ./
