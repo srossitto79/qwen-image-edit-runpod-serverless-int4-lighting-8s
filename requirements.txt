@@ -9,3 +9,4 @@ numpy>=1.26.4
 fastapi>=0.112.0
 uvicorn[standard]>=0.30.0
 hf_transfer>=0.1.6
+bitsandbytes==0.48.1

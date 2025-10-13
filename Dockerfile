@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libglib2.0-0 libsm6 libxext6 libxrender1 git \
+    ca-certificates libglib2.0-0 libsm6 libxext6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first (leverage layer cache)
@@ -115,33 +115,62 @@ if use_original:
             print('Warn: could not remove single-file encoder:', e)
     print('Using original sharded text encoder under', te_dir)
 else:
-    # Choose a compact single-file text encoder from Comfy-Org (16-bit by default)
-    te_repo = 'Comfy-Org/Qwen-Image_ComfyUI'
-    te_file = 'split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors'
-    te_src = hf_hub_download(repo_id=te_repo, filename=te_file)
-    shutil.copy(te_src, os.path.join(te_dir, 'model.safetensors'))
-    # Ensure no stale index references shards; remove if exists
-    idx = os.path.join(te_dir, 'model.safetensors.index.json')
-    if os.path.exists(idx):
+    # Fetch the original sharded text encoder and attempt to produce a BitsAndBytes
+    # 8-bit quantized artifact to store in the image.
+    snapshot_download(
+        repo_id='Qwen/Qwen-Image-Edit',
+        local_dir=pipe_dir,
+        allow_patterns=[
+            'text_encoder/model.safetensors.index.json',
+            'text_encoder/model-*.safetensors',
+        ],
+    )
+    # Try BitsAndBytes quantization first
+    try:
+        from transformers import AutoModelForVision2Seq, BitsAndBytesConfig
+        import torch, glob
+
+        has_cuda = torch.cuda.is_available()
+        device_map = "auto" if has_cuda else None
+        bnb_config = BitsAndBytesConfig(load_in_4bit=False, load_in_8bit=True)
+
+        # Load with quantization_config. This step commonly requires GPU access
+        # because bitsandbytes performs CUDA-backed quantization/trapping of weights.
+        model_bnb = AutoModelForVision2Seq.from_pretrained(
+            te_dir,
+            quantization_config=bnb_config,
+            device_map=device_map,
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+        bnb_dir = os.path.join(models_dir, 'Qwen-Image-Edit', 'text_encoder_bnb8')
+        model_bnb.save_pretrained(bnb_dir)
+        print('Saved BitsAndBytes-quantized text encoder to', bnb_dir)
+
+        # Replace the canonical text_encoder directory with the BnB-quantized
+        # version we just produced. This keeps the runtime loader simple: the
+        # handler can always load from <pipeline>/text_encoder whether the
+        # contents are a BnB-quantized checkpoint or a regular safetensors
+        # layout.
         try:
-            os.remove(idx)
-            print('Removed stale index file:', idx)
+            import shutil
+            # Remove the original text_encoder directory to avoid conflicts
+            if os.path.exists(te_dir):
+                shutil.rmtree(te_dir)
+            # Rename the bnb output to the canonical path
+            os.rename(bnb_dir, te_dir)
+            print('Replaced original text_encoder with bnb quantized version at', te_dir)
         except Exception as _e:
-            print('Warn: could not remove index file:', _e)
-    # Remove any stray shard files to avoid accidental loading of sharded weights
-    for _n in os.listdir(te_dir):
-        if _n.startswith('model.safetensors-') and _n.endswith('.safetensors'):
-            try:
-                os.remove(os.path.join(te_dir, _n))
-                print('Removed stale shard:', _n)
-            except Exception as _e:
-                print('Warn: could not remove shard', _n, ':', _e)
-    print('Downloaded compact single-file text encoder to', os.path.join(te_dir, 'model.safetensors'))
+            print('Warn: could not rename bnb dir to text_encoder:', _e)
+    except Exception as _e:
+        print('BitsAndBytes quantization failed during build; aborting build:', _e)
+        raise
 PY
 
 RUN python3 - <<'PY'
-from safetensors import safe_open, safe_save
-import os, torch, tempfile
+from safetensors import safe_open
+from safetensors.torch import save_file
+import os, tempfile
 
 def compress(path):
     if not os.path.exists(path): return
@@ -150,7 +179,7 @@ def compress(path):
         for k in f.keys():
             tensors[k] = f.get_tensor(k)
     tmp = tempfile.mktemp(suffix=".safetensors")
-    safe_save(tensors, tmp, metadata={"compression": "zstd"})
+    save_file(tensors, tmp, metadata={"compression": "zstd"})
     os.replace(tmp, path)
     print("Compressed", path)
 
