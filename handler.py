@@ -148,8 +148,10 @@ def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPi
     # Configure memory management based on available GPU memory
     if device == "cuda":
         if get_gpu_memory() > 18:
+            print("Configuring standard offload for high-memory GPU...")
             pipe_local.enable_model_cpu_offload()
         else:
+            print("Configuring Nunchaku offload for low-memory GPU...")
             transformer.set_offload(True, use_pin_memory=False, num_blocks_on_gpu=1)
             pipe_local._exclude_from_cpu_offload.append("transformer")
             pipe_local.enable_sequential_cpu_offload()
