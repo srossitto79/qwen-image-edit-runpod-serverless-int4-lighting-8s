@@ -19,7 +19,7 @@ curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{\"i
 
 - ✅ Docker with GPU support
 - ✅ NVIDIA GPU (8GB+ VRAM recommended)  
-- ✅ 25GB+ free disk space
+- ✅ 90GB+ free disk space (base image + models + build artifacts)
 - ✅ Internet connection
 
 ## 🎯 Choose Your Build
@@ -68,8 +68,8 @@ python test_local_http_endpoint.py
 
 ## 📊 Expected Results
 
-- **Build time**: 15-30 minutes (depending on internet speed)
-- **Container size**: 12-19GB (depending on configuration)
+- **Build time**: 20-45 minutes (depending on internet speed)
+- **Container size**: 19-50GB (depending on configuration)
 - **First inference**: 30-60 seconds (model loading)
 - **Subsequent inference**: 3-8 seconds
 
@@ -77,10 +77,10 @@ python test_local_http_endpoint.py
 
 | Use Case | Build Command | Size | Speed | Quality |
 |----------|---------------|------|-------|---------|
-| Development | `docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=false .` | ~12GB | Fast | Good |
-| Production | `docker build .` | ~18GB | Fast | Best |
-| Low Memory | `docker build --build-arg RANK=32 --build-arg USE_ORIGINAL_TEXT_ENCODER=false .` | ~8GB | Fast | Good |
-| Max Quality | `docker build --build-arg RANK=128 --build-arg DOWNLOAD_LORA=true .` | ~19GB | Fastest | Best |
+| Development | `docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=false .` | ~29-30GB | Fast | Good |
+| Production | `docker build .` | ~49-50GB | Fast | Best |
+| Low Memory | `docker build --build-arg RANK=32 --build-arg USE_ORIGINAL_TEXT_ENCODER=false .` | ~28-29GB | Fast | Good |
+| Max Quality | `docker build --build-arg RANK=128 --build-arg DOWNLOAD_LORA=true .` | ~52-53GB | Fastest | Best |
 
 ## 🐛 Something Not Working?
 

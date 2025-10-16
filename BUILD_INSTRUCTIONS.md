@@ -5,7 +5,7 @@ This document provides detailed instructions for building and configuring the en
 ## Prerequisites
 
 - Docker with NVIDIA GPU support
-- At least 25GB free disk space for build
+- At least 90GB free disk space for build (base image + models + build artifacts)
 - Internet connectivity for model downloads
 - NVIDIA GPU with >=8GB VRAM for runtime
 
@@ -20,8 +20,6 @@ The build process supports several environment variables for customization:
 | `RANK` | `128` | SVD quantization rank (32, 64, 128) |
 | `LIGHTING` | `8` | Lightning steps ("4", "8", "NONE") |
 | `USE_ORIGINAL_TEXT_ENCODER` | `true` | Use original vs compact text encoder |
-| `DOWNLOAD_LORA` | `false` | Download LoRA weights |
-| `COMPRESS_FILES` | `true` | Compress safetensors files |
 
 ### Build Arguments
 
@@ -40,7 +38,7 @@ docker build -t qwen-nunchaku:latest .
 - Rank: 128
 - Lightning: 8 steps
 - Text Encoder: Original
-- Size: ~18GB
+- Size: ~49-50GB
 
 ### Optimized Build (Memory Efficient)
 ```cmd
@@ -49,17 +47,8 @@ docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=false --build-arg RANK=32 -t 
 - Rank: 32 (smaller model)
 - Lightning: 8 steps
 - Text Encoder: Compact FP8
-- Size: ~12GB
+- Size: ~29-30GB
 
-### High Performance Build (with LoRA)
-```cmd
-docker build --build-arg DOWNLOAD_LORA=true --build-arg RANK=128 --build-arg LIGHTING=8 -t qwen-nunchaku:performance .
-```
-- Rank: 128 (best quality)
-- Lightning: 8 steps
-- Text Encoder: Original
-- LoRA: Included
-- Size: ~19GB
 
 ### Development Build (Fast iterations)
 ```cmd
@@ -105,7 +94,6 @@ docker build --build-arg COMPRESS_FILES=false --build-arg USE_ORIGINAL_TEXT_ENCO
 - Optionally download LoRA weights
 
 ### Stage 3: Optimization
-- Compress safetensors files (if enabled)
 - Clean up unnecessary files
 - Set offline mode flags
 
@@ -133,17 +121,17 @@ The container automatically adjusts memory usage based on available GPU memory:
 ### Build Errors
 
 **Out of disk space**
-- Ensure at least 25GB free space
+- Ensure at least 90GB free space (base image 7-8GB + models + build artifacts + Docker overhead)
 - Use `docker system prune` to clean up
 
 **Network timeouts**
 - Check internet connectivity
-- Model downloads can be large (5-15GB)
+- Model downloads can be large (25-35GB)
 - Consider using a build machine with good bandwidth
 
 **CUDA compatibility**
 - Ensure NVIDIA drivers are up to date
-- Check Docker NVIDIA runtime installation
+- Check Docker NVIDIA runtime installation (CUDA >=2.8)
 
 ### Runtime Issues
 
@@ -161,7 +149,6 @@ The container automatically adjusts memory usage based on available GPU memory:
 
 **Faster inference**
 - Use Lightning variants: `LIGHTING=8` or `LIGHTING=4`
-- Enable LoRA: `DOWNLOAD_LORA=true`
 - Use compact text encoder for memory efficiency
 
 **Better quality**
@@ -198,14 +185,21 @@ For production on RunPod:
 
 ## File Size Reference
 
-| Component | Original | Compact | Compressed |
-|-----------|----------|---------|------------|
-| Transformer (R128) | ~8GB | ~8GB | ~6GB |
-| Transformer (R32) | ~3GB | ~3GB | ~2GB |
-| Text Encoder (Original) | ~8GB | - | ~6GB |
-| Text Encoder (Compact) | - | ~2GB | ~1.5GB |
-| LoRA Weights | ~400MB | ~400MB | ~300MB |
-| Pipeline Configs | ~50MB | ~50MB | ~50MB |
+| Component | Size |
+|-----------|------|
+| Base Image (runpod/pytorch) | ~7-8GB |
+| Transformer (INT4 R128, any LIGHTING variant) | ~12.7GB |
+| Transformer (INT4 R32, any LIGHTING variant) | ~11.5GB |
+| Transformer (FP4 R128, any LIGHTING variant) | ~13.1GB |
+| Transformer (FP4 R32, any LIGHTING variant) | ~11.9GB |
+| Text Encoder (Original, full precision) | ~16GB |
+| Text Encoder (Compact, FP8) | ~9GB |
+| Pipeline Config (with text encoder) | ~16GB |
+| Pipeline Config (without text encoder) | ~340MB |
+| **Total (INT4 R128 + Original TE)** | **~49-50GB** |
+| **Total (INT4 R128 + Compact TE)** | **~29-30GB** |
+| **Total (INT4 R32 + Compact TE)** | **~28-29GB** |
+| **Total (INT4 R32 only)** | **~19-20GB** |
 
 ## Best Practices
 

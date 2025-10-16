@@ -37,3 +37,6 @@ test_*
 .runpod/
 pool_result_*.png
 result*.png
+
+# Test scripts
+tests/

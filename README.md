@@ -23,21 +23,54 @@ This repository packages a Runpod Serverless worker that performs image editing 
 
 ### Input Parameters
 
-### Input Parameters
+#### Image Input (choose one)
+- `image`: Single image input (URL or base64) - **optional if `images` provided**
+- `images`: List of images (URLs or base64 strings) for multi-image composing - **optional if `image` provided**
+  - Use this parameter for multi-image composition workflows
+  - Note: At least one of `image` or `images` must be provided
 
-- `image`: Image input (URL or base64) - **required**
+#### Editing Parameters
 - `prompt`: Edit instruction - **required**
 - `negative_prompt`: Negative prompt (default: " ")
-- `num_inference_steps`: Number of inference steps (default: 8)
-- `true_cfg_scale`: CFG scale (default: 4.0)
-- `width`: Output width (optional)
-- `height`: Output height (optional)
+- `num_inference_steps`: Number of inference steps (default: 8, max: 50)
+- `true_cfg_scale`: CFG scale for guidance strength (default: 4.0)
+- `width`: Output width in pixels (optional, default: 1024)
+- `height`: Output height in pixels (optional, default: 1024)
 
 ### Response
 
 ```json
 {
   "image_base64": "iVBORw0KGgoAAAANSUhEUgAA..."
+}
+```
+
+### Example Requests
+
+**Single Image Edit:**
+```json
+{
+  "input": {
+    "image": "https://example.com/image.jpg",
+    "prompt": "make the sky purple",
+    "num_inference_steps": 8,
+    "true_cfg_scale": 4.0
+  }
+}
+```
+
+**Multi-Image Composition:**
+```json
+{
+  "input": {
+    "images": [
+      "https://example.com/image1.jpg",
+      "https://example.com/image2.jpg",
+      "base64_encoded_image_data_here"
+    ],
+    "prompt": "blend the images together",
+    "num_inference_steps": 8
+  }
 }
 ```
 
@@ -80,6 +113,7 @@ export RUNPOD_LOCAL_TEST=1 && python handler.py
 
 ### 3. Test the API
 
+**Single image example:**
 ```cmd
 curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
   \"input\": {
@@ -87,6 +121,20 @@ curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
     \"prompt\": \"change the text to read 'Hello Runpod'\",
     \"num_inference_steps\": 8,
     \"true_cfg_scale\": 4.0
+  }
+}"
+```
+
+**Multi-image composition example:**
+```cmd
+curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
+  \"input\": {
+    \"images\": [
+      \"https://example.com/image1.jpg\",
+      \"https://example.com/image2.jpg\"
+    ],
+    \"prompt\": \"blend these images together\",
+    \"num_inference_steps\": 8
   }
 }"
 ```
@@ -101,12 +149,28 @@ curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
 - `DOWNLOAD_LORA`: Download LoRA weights - default: "false"
 - `COMPRESS_FILES`: Compress safetensors files - default: "true"
 
-### Environment Variables
+### Runtime Environment Variables
 
 - `MODELS_DIR`: Model storage directory - default: "./models"
 - `DEFAULT_STEPS`: Default inference steps - default: 8
 - `DEFAULT_SCALE`: Default CFG scale - default: 4.0
-- `DEFAULT_RANK`: Default quantization rank - default: 128
+- `RUNPOD_LOCAL_TEST`: Enable local FastAPI server for testing - default: not set
+
+### Docker Build Examples
+
+```cmd
+# Standard build (Rank 128, Original Text Encoder)
+docker build -t qwen-image-edit-nunchaku .
+
+# Compact build (Rank 32, Compact Text Encoder, ~29-30GB)
+docker build --build-arg RANK=32 --build-arg USE_ORIGINAL_TEXT_ENCODER=false -t qwen-image-edit-nunchaku:compact .
+
+# Fast inference (4-step Lightning)
+docker build --build-arg LIGHTING=4 -t qwen-image-edit-nunchaku:fast .
+
+# High quality (Original settings + LoRA)
+docker build --build-arg DOWNLOAD_LORA=true -t qwen-image-edit-nunchaku:quality .
+```
 
 ## Model Structure
 
@@ -135,4 +199,10 @@ models/
 
 ## Author
 
-Enhanced by the community | Original by Salvatore Rossitto
+Made with passion by Salvatore Rossitto
+
+## Support & Documentation
+
+- **Build Instructions**: See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for detailed build configurations
+- **Quick Start**: See [QUICK_START.md](QUICK_START.md) for getting started quickly
+- **Issues**: Check tests in `tests/` folder for usage examples
