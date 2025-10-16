@@ -48,6 +48,8 @@ RUN python3 --version \
  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
  && find ${MODELS_DIR} -type d -name ".git" -exec rm -rf {} + 2>/dev/null || true \
  && find ${MODELS_DIR} -type f \( -name "*.msgpack" -o -name "*.parquet" -o -name "*.h5" -o -name "*.bin" \) -delete 2>/dev/null || true \
+ && (find /usr/local/lib/python3.12 -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete 2>/dev/null || true) \
+ && (find /usr/local/lib/python3.12 -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true) \
  && (find /usr/local/lib/python3.10 -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete 2>/dev/null || true) \
  && (find /usr/local/lib/python3.10 -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true) \
  && rm -rf /root/.cache /tmp/* /var/tmp/*
