@@ -15,7 +15,7 @@ import runpod
 from PIL import Image
 
 import torch
-from diffusers import QwenImageEditPipeline
+from diffusers import QwenImageEditPlusPipeline
 from diffusers.utils import load_image
 
 from nunchaku import NunchakuQwenImageTransformer2DModel
@@ -42,7 +42,7 @@ if not os.path.exists(TRANSFORMER_PATH):
     raise FileNotFoundError(f"Transformer model file not found at {TRANSFORMER_PATH}")
 
 # Lazy globals
-pipe: Optional[QwenImageEditPipeline] = None
+pipe: Optional[QwenImageEditPlusPipeline] = None
 
 
 def load_text_encoder(checkpoint_path: str, model_source: str, torch_dtype: torch.dtype = torch.bfloat16) -> Qwen2_5_VLForConditionalGeneration:
@@ -108,7 +108,7 @@ def load_text_encoder(checkpoint_path: str, model_source: str, torch_dtype: torc
     return model
 
 
-def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPipeline:
+def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPlusPipeline:
     global pipe
     if pipe is not None:
         return pipe
@@ -122,7 +122,7 @@ def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPi
     if USE_ORIGINAL_TEXT_ENCODER or not os.path.exists(COMPACT_TE_PATH):
         print("Loading original text encoder model...")
         print("Finalizing pipeline load...")
-        pipe_local = QwenImageEditPipeline.from_pretrained(
+        pipe_local = QwenImageEditPlusPipeline.from_pretrained(
             MODEL_ID,
             transformer=transformer,
             torch_dtype=target_dtype if device == "cuda" else torch.float32,
@@ -135,7 +135,7 @@ def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPi
         text_encoder = load_text_encoder(COMPACT_TE_PATH, MODEL_ID, torch_dtype=target_dtype)
 
         print("Finalizing pipeline load...")
-        pipe_local = QwenImageEditPipeline.from_pretrained(
+        pipe_local = QwenImageEditPlusPipeline.from_pretrained(
             MODEL_ID,
             transformer=transformer,
             text_encoder=text_encoder,
@@ -199,6 +199,7 @@ def encode_image(img: Image.Image, format: str = "PNG") -> str:
 def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     inp = job.get("input") or {}
     image_in = inp.get("image")
+    images_in = inp.get("images")
     prompt = inp.get("prompt")
     negative_prompt = inp.get("negative_prompt", " ")
     num_inference_steps = int(inp.get("num_inference_steps", DEFAULT_STEPS))
@@ -206,7 +207,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     width = inp.get("width")
     height = inp.get("height")
 
-    if not image_in or not prompt:
+    if (not image_in and not images_in) or not prompt:
         return {"error": "Missing required fields: image, prompt"}
 
     start_time = time.time()
@@ -214,16 +215,23 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     print("Loading pipeline...")
     pipe = load_pipeline(target_dtype=torch.bfloat16)
 
+    images = []
     print("Reading input image...")
-    image = read_image(image_in)
+    if image_in:
+        images.append(read_image(image_in))
+
+    if images_in and isinstance(images_in, list) and len(images_in) > 0:
+        for img_src in images_in:
+            images.append(read_image(img_src))            
 
     kwargs = {
-        "image": image,
+        "image": images,
         "prompt": prompt,
         "true_cfg_scale": true_cfg_scale,
         "negative_prompt": negative_prompt,
         "num_inference_steps": num_inference_steps,
     }
+    
     if width:
         kwargs["width"] = int(width)
     if height:
