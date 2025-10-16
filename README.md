@@ -98,8 +98,6 @@ curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
 - `RANK`: SVD quantization rank (32, 64, 128) - default: 128
 - `LIGHTING`: Lightning steps ("4", "8", "NONE") - default: "8"
 - `USE_ORIGINAL_TEXT_ENCODER`: Use original vs compact text encoder - default: "true"
-- `DOWNLOAD_LORA`: Download LoRA weights - default: "false"
-- `COMPRESS_FILES`: Compress safetensors files - default: "true"
 
 ### Environment Variables
 
@@ -135,4 +133,4 @@ models/
 
 ## Author
 
-Enhanced by the community | Original by Salvatore Rossitto
+Created with passion by Salvatore Rossitto
