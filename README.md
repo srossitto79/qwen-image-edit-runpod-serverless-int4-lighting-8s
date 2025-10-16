@@ -178,8 +178,6 @@ models/
 │   └── transformer.safetensors    # Nunchaku quantized transformer
 ├── text_encoders/
 │   └── qwen_2.5_vl_7b_fp8_scaled.safetensors  # Optional compact text encoder
-├── loras/
-│   └── Qwen-Image-Lightning-8steps-V2.0.safetensors  # Optional LoRA weights
 └── Qwen-Image-Edit/               # Pipeline config and original text encoder
     ├── scheduler/
     ├── vae/
