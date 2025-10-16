@@ -1,4 +1,5 @@
-torch==2.7.1 ; platform_system == "Linux"
+torch==2.7.1 ; sys_platform == "linux"
+torch==2.8.0 ; sys_platform == "win32"
 runpod==1.7.0
 accelerate==1.10.1
 safetensors==0.6.2
@@ -10,4 +11,5 @@ numpy
 fastapi
 uvicorn[standard]
 hf_transfer 
-git+https://github.com/nunchaku-tech/nunchaku.git@v1.0.1 --only-binary :all:
+https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.8-cp312-cp312-win_amd64.whl ; sys_platform == "win32"
+https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.7-cp310-cp310-linux_x86_64.whl ; sys_platform == "linux"
