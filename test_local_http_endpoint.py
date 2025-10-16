@@ -5,20 +5,8 @@ from io import BytesIO
 url = "http://localhost:3000/"
 
 base64_input = ""
-# with open("./test_input.jpg", "rb") as f:
-#     img_bytes = f.read()
-#     base64_input = base64.b64encode(img_bytes).decode("utf-8")
 
-# payload = {
-#     "input": {
-#         "image": base64_input,
-#         "prompt": "Transform this exterior space, enhancing textures and lighting. Preserve the camera angle, geometry, and composition. Enhance the vibrant colors and detailed textures of the image. Add subtle shadows and highlights to create a more realistic and immersive environment. Preserve the natural atmosphere and the ambiance.",
-#         "num_inference_steps": 8,
-#         "true_cfg_scale": 4.0
-#     }
-# }
-
-with open("./test_input2.jpg", "rb") as f:
+with open("./test_input.jpg", "rb") as f:
     img_bytes = f.read()
     #resize the image to 1MPixels
     from PIL import Image
@@ -35,7 +23,7 @@ payload = {
         "image": base64_input,
         "prompt": "Transform this exterior space, enhancing textures and lighting. Preserve the camera angle, geometry, and composition. Enhance the vibrant colors and detailed textures of the image. Add subtle shadows and highlights to create a more realistic and immersive environment. Preserve the natural atmosphere and the ambiance.",
         "num_inference_steps": 8,
-        "true_cfg_scale": 1.5
+        "true_cfg_scale": 4.0
     }
 }
 

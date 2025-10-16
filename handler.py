@@ -1,7 +1,15 @@
 import base64
 import io
 import os
-from typing import Any, Dict, Optional, Tuple
+import time
+import warnings
+from typing import Any, Dict, Optional
+
+# Ensure HF cache dirs are configured BEFORE importing HF libs
+_MODELS_DIR_BOOT = os.getenv("MODELS_DIR", "./models")
+os.environ.setdefault("HF_HOME", _MODELS_DIR_BOOT)
+os.environ.setdefault("HUGGINGFACE_HUB_CACHE", _MODELS_DIR_BOOT)
+os.environ.setdefault("DIFFUSERS_CACHE", _MODELS_DIR_BOOT)
 
 import runpod
 from PIL import Image
@@ -12,67 +20,132 @@ from diffusers.utils import load_image
 
 from nunchaku import NunchakuQwenImageTransformer2DModel
 from nunchaku.utils import get_gpu_memory, get_precision
-from transformers import Qwen2_5_VLForConditionalGeneration
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoConfig
+
+warnings.filterwarnings("ignore", message=".*Some weights of the model checkpoint.*were not used.*")
 
 # Model locations baked into the container at build-time
-MODELS_DIR = os.getenv("MODELS_DIR", "/models")
-PIPELINE_DIR = os.path.join(MODELS_DIR, "Qwen-Image-Edit")  # diffusers pipeline
-TRANSFORMER_PATH = os.path.join(MODELS_DIR, "transformer.safetensors")  # nunchaku quantized
+MODELS_DIR = os.getenv("MODELS_DIR", "./models")
+MODEL_ID = "Qwen/Qwen-Image-Edit"
+TRANSFORMER_PATH = os.path.join(MODELS_DIR, "diffusion_models", "transformer.safetensors")  # nunchaku quantized
+
+# Configuration options
+USE_ORIGINAL_TEXT_ENCODER = os.getenv("USE_ORIGINAL_TEXT_ENCODER", "true").lower() in ("true", "1", "yes")
+COMPACT_TE_PATH = os.path.join(MODELS_DIR, "text_encoders", "qwen_2.5_vl_7b_fp8_scaled.safetensors")
 
 DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "8"))
 DEFAULT_SCALE = float(os.getenv("DEFAULT_SCALE", "4.0"))
-DEFAULT_RANK = int(os.getenv("DEFAULT_RANK", "32"))  # informational only; used at build time
+DEFAULT_RANK = int(os.getenv("DEFAULT_RANK", "128"))  # informational only; used at build time
 
+
+if not os.path.exists(TRANSFORMER_PATH):
+    raise FileNotFoundError(f"Transformer model file not found at {TRANSFORMER_PATH}")
 
 # Lazy globals
 pipe: Optional[QwenImageEditPipeline] = None
 
 
-def load_pipeline() -> QwenImageEditPipeline:
+def load_text_encoder(checkpoint_path: str, model_source: str, torch_dtype: torch.dtype = torch.bfloat16) -> Qwen2_5_VLForConditionalGeneration:
+    """
+    Load text encoder from a safetensors file or directory.
+    Optimized for both original sharded weights and compact FP8 quantized safetensors files.
+    """
+    # If it's a directory, use standard from_pretrained
+    if os.path.isdir(checkpoint_path):
+        return Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            checkpoint_path,
+            torch_dtype=torch_dtype,
+            local_files_only=True,
+            low_cpu_mem_usage=False,
+        )
+
+    # For single safetensors file: load directly with minimal overhead
+    from safetensors.torch import load_file
+
+    print("Loading config...")
+    config = AutoConfig.from_pretrained(
+        model_source,
+        trust_remote_code=True,
+        subfolder="text_encoder",
+        local_files_only=True,
+        cache_dir=MODELS_DIR,
+    )
+
+    print("Loading weights from safetensors...")
+    state_dict = load_file(checkpoint_path, device="cpu")
+    
+    print("Instantiating text encoder from config with provided state_dict...")
+    try:
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            None,
+            config=config,
+            state_dict=state_dict,
+            local_files_only=True,
+            cache_dir=MODELS_DIR,
+        )
+    except TypeError:
+        # Fallback for older transformers: manual init + load_state_dict
+        model = Qwen2_5_VLForConditionalGeneration(config)
+        model.load_state_dict(state_dict, strict=False)
+    
+    # Ensure text encoder data type
+    if torch_dtype is not None:
+        model.to(dtype=torch_dtype)
+
+        # Some float8 tensors may not convert with a single .to; enforce per-param cast
+        for p in model.parameters():
+            if p.dtype != torch_dtype:
+                p.data = p.data.to(torch_dtype)
+        for b_name, b in model.named_buffers():
+            try:
+                if hasattr(b, 'dtype') and b.dtype != torch_dtype:
+                    # Replace buffer in-place
+                    setattr(model, b_name, b.to(torch_dtype))
+            except Exception:
+                pass
+
+    print("Text encoder loaded successfully!")
+    return model
+
+
+def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPipeline:
     global pipe
     if pipe is not None:
         return pipe
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    print("Loading Nunchaku transformer model...")
     transformer = NunchakuQwenImageTransformer2DModel.from_pretrained(TRANSFORMER_PATH)
 
-    # Manually load text encoder to avoid diffusers passing unsupported kwargs
-    te_dtype = torch.bfloat16 if device == "cuda" else torch.float32
-    text_encoder_path = os.path.join(PIPELINE_DIR, "text_encoder")
-    text_encoder = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-        text_encoder_path,
-        torch_dtype=te_dtype,
-        local_files_only=True,
-        low_cpu_mem_usage=False,
-    )
+    # Load text encoder based on configuration
+    if USE_ORIGINAL_TEXT_ENCODER or not os.path.exists(COMPACT_TE_PATH):
+        print("Loading original text encoder model...")
+        print("Finalizing pipeline load...")
+        pipe_local = QwenImageEditPipeline.from_pretrained(
+            MODEL_ID,
+            transformer=transformer,
+            torch_dtype=target_dtype if device == "cuda" else torch.float32,
+            local_files_only=True,
+            low_cpu_mem_usage=False,
+            cache_dir=MODELS_DIR
+        )
+    else:
+        print("Loading compact FP8 text encoder model...")
+        text_encoder = load_text_encoder(COMPACT_TE_PATH, MODEL_ID, torch_dtype=target_dtype)
 
-    # Ensure text encoder params are in the expected dtype (de-quantize fp8 weights if present)
-    try:
-        text_encoder.to(dtype=te_dtype)
-        # Some float8 tensors may not convert with a single .to; enforce per-param cast
-        for p in text_encoder.parameters():
-            if p.dtype != te_dtype:
-                p.data = p.data.to(te_dtype)
-        for b_name, b in text_encoder.named_buffers():
-            try:
-                if hasattr(b, 'dtype') and b.dtype != te_dtype:
-                    # Replace buffer in-place
-                    setattr(text_encoder, b_name, b.to(te_dtype))
-            except Exception:
-                pass
-    except Exception:
-        pass
+        print("Finalizing pipeline load...")
+        pipe_local = QwenImageEditPipeline.from_pretrained(
+            MODEL_ID,
+            transformer=transformer,
+            text_encoder=text_encoder,
+            torch_dtype=target_dtype if device == "cuda" else torch.float32,
+            local_files_only=True,
+            low_cpu_mem_usage=False,
+            cache_dir=MODELS_DIR
+        )
 
-    pipe_local = QwenImageEditPipeline.from_pretrained(
-        PIPELINE_DIR,
-        transformer=transformer,
-        text_encoder=text_encoder,
-        torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
-        local_files_only=True,
-        low_cpu_mem_usage=False,
-    )
-
+    # Configure memory management based on available GPU memory
     if device == "cuda":
         if get_gpu_memory() > 18:
             pipe_local.enable_model_cpu_offload()
@@ -80,7 +153,15 @@ def load_pipeline() -> QwenImageEditPipeline:
             transformer.set_offload(True, use_pin_memory=False, num_blocks_on_gpu=1)
             pipe_local._exclude_from_cpu_offload.append("transformer")
             pipe_local.enable_sequential_cpu_offload()
+    
+    pipe_local.set_progress_bar_config(disable=None)
     pipe = pipe_local
+
+    # Print dtype information for debugging
+    print(f"Transformer dType: {pipe.transformer.dtype if hasattr(pipe.transformer, 'dtype') else 'N/A'}")
+    print(f"Text encoder dType: {pipe.text_encoder.dtype}")
+    print(f"VAE dType: {pipe.vae.dtype}")
+
     return pipe
 
 
@@ -99,7 +180,7 @@ def read_image(source: str) -> Image.Image:
         img = Image.open(io.BytesIO(data)).convert("RGB")
         max_pixels = 1024 * 1024
         if img.width * img.height > max_pixels:
-            img.thumbnail((1024, 1024), Image.ANTIALIAS)
+            img.thumbnail((1024, 1024), Image.LANCZOS)
         return img
     except Exception as e:
         raise ValueError(f"Failed to decode image input: {e}")
@@ -126,8 +207,12 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     if not image_in or not prompt:
         return {"error": "Missing required fields: image, prompt"}
 
-    pipe = load_pipeline()
+    start_time = time.time()
 
+    print("Loading pipeline...")
+    pipe = load_pipeline(target_dtype=torch.bfloat16)
+
+    print("Reading input image...")
     image = read_image(image_in)
 
     kwargs = {
@@ -142,10 +227,17 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     if height:
         kwargs["height"] = int(height)
 
+    print(f"Pipeline loading time: {time.time() - start_time:.2f} seconds")
+    print("Generating image...")
+    
+    torch.cuda.empty_cache()
+
     out = pipe(**kwargs)
     out_img = out.images[0]
 
     b64 = encode_image(out_img)
+    print(f"Total processing time: {time.time() - start_time:.2f} seconds")
+    
     return {"image_base64": b64}
 
 

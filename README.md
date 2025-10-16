@@ -1,139 +1,122 @@
-# Qwen-Image-Edit Serverless on Runpod (with Nunchaku)
+# Qwen-Image-Edit Serverless on Runpod (with Nunchaku) - Enhanced Version
 
-This repository packages a Runpod Serverless worker that performs image editing using Qwen-Image-Edit with Nunchaku-quantized transformer weights embedded inside the Docker image (<= 20GB).
+This repository packages a Runpod Serverless worker that performs image editing using Qwen-Image-Edit with Nunchaku-quantized transformer weights. This enhanced version features improved organization, automated model downloading, and flexible configuration.
 
-- Model: Qwen/Qwen-Image-Edit (Diffusers pipeline) + Nunchaku quantized transformer (INT4/FP4, rank selectable) + Lighting 8steps lora
-- Runtime: Python worker using Runpod serverless
-- Input: image (URL or base64), prompt, negative_prompt (optional), steps, scale
-- Output: base64-encoded edited image
+## Key Improvements
 
-## Inputs
+- **Organized Model Structure**: Models are now organized in dedicated folders (`diffusion_models/`, `text_encoders/`, `loras/`)
+- **Automated Downloads**: `download_models.py` script handles model downloading with smart caching
+- **Enhanced Dockerfile**: Better layer caching, compression, and build optimization
+- **Flexible Configuration**: Environment-based configuration for different model variants
+- **Improved Error Handling**: Better logging and error reporting
+- **Performance Monitoring**: Built-in timing and memory management
 
-- image: string
-  - Either an http(s) URL to an image, or a data URL / base64-encoded PNG/JPEG.
-- prompt: string (required)
-- negative_prompt: string (optional; default " ")
-- num_inference_steps: int (optional; default 8)
-- true_cfg_scale: float (optional; default 4.0)
-- width: int (optional)
-- height: int (optional)
+## Features
 
-## Quick local run (Docker)
+- **Model**: Qwen/Qwen-Image-Edit (Diffusers pipeline) + Nunchaku quantized transformer (INT4, configurable rank)
+- **Text Encoder Options**: Original full-precision or compact FP8 quantized
+- **Lightning Support**: 4-step and 8-step variants for faster inference
+- **Memory Management**: Intelligent GPU memory management with offloading
+- **Runtime**: Python worker using Runpod serverless with FastAPI local testing
 
-You can run locally using uvicorn to sanity-check the handler:
+## API Reference
 
-1. Build the image (downloads and embeds weights). You can control these build args:
+### Input Parameters
 
-   - RANK: 32 or 128 (default 128)
-   - LIGHTING: NONE, 4, or 8 (default NONE)
-   - USE_ORIGINAL_TEXT_ENCODER: true/false or 1/0 or Y/N (default true = use original sharded encoder)
+### Input Parameters
 
-```cmd
-docker build -t qwen-image-edit-serverless .
+- `image`: Image input (URL or base64) - **required**
+- `prompt`: Edit instruction - **required**
+- `negative_prompt`: Negative prompt (default: " ")
+- `num_inference_steps`: Number of inference steps (default: 8)
+- `true_cfg_scale`: CFG scale (default: 4.0)
+- `width`: Output width (optional)
+- `height`: Output height (optional)
+
+### Response
+
+```json
+{
+  "image_base64": "iVBORw0KGgoAAAANSUhEUgAA..."
+}
 ```
 
-   Examples:
+## Quick Start
 
-   - Use original sharded text encoder (default):
-     ```cmd
-     docker build -t qwen-image-edit-serverless:orig-te .
-     ```
+### 1. Build the Image
 
-   - Use compact single-file text encoder instead:
-     ```cmd
-     docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=false -t qwen-image-edit-serverless:compact-te .
-     ```
-
-   - Set rank and lighting variant (e.g., RANK=32, LIGHTING=8):
-     ```cmd
-     docker build --build-arg RANK=32 --build-arg LIGHTING=8 -t qwen-image-edit-serverless:r32-l8 .
-     ```
-
-2. Run container locally with a simple HTTP API (FastAPI) by setting RUNPOD_LOCAL_TEST=1:
-
+Basic build with defaults (Rank 128, Lightning 8-step, original text encoder):
 ```cmd
-docker run --gpus all -p 3000:3000 -e RUNPOD_LOCAL_TEST=1 qwen-image-edit-serverless
+docker build -t qwen-image-edit-nunchaku .
 ```
 
-3. Send a test job (replace URL as needed):
+Optimized build with compact text encoder:
+```cmd
+docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=false -t qwen-image-edit-nunchaku:compact .
+```
+
+### 2. Local Testing
+
+Run with FastAPI for local testing:
+```cmd
+docker run --gpus all -p 3000:3000 -e RUNPOD_LOCAL_TEST=1 qwen-image-edit-nunchaku
+```
+
+### 3. Test the API
 
 ```cmd
 curl -X POST http://localhost:3000/ -H "Content-Type: application/json" -d "{
   \"input\": {
     \"image\": \"https://huggingface.co/datasets/nunchaku-tech/test-data/resolve/main/inputs/neon_sign.png\",
     \"prompt\": \"change the text to read 'Hello Runpod'\",
-    \"num_inference_steps\": 20,
-    \"true_cfg_scale\": 3.5
+    \"num_inference_steps\": 8,
+    \"true_cfg_scale\": 4.0
   }
 }"
 ```
 
-The response will contain a base64 field with the edited image.
+## Configuration Options
 
-## Build arguments at a glance
+### Build Arguments
 
-- RANK: 32 or 128 (default 128)
-- LIGHTING: NONE, 4, or 8 (default NONE). Selects the corresponding Lightning 4/8 step transformer variant.
-- USE_ORIGINAL_TEXT_ENCODER: true/false or 1/0 or Y/N (default true). When true, downloads the original sharded text encoder from Qwen/Qwen-Image-Edit. When false, downloads a compact single-file encoder from Comfy-Org/Qwen-Image_ComfyUI and removes any shard remnants.
+- `RANK`: SVD quantization rank (32, 64, 128) - default: 128
+- `LIGHTING`: Lightning steps ("4", "8", "NONE") - default: "8"
+- `USE_ORIGINAL_TEXT_ENCODER`: Use original vs compact text encoder - default: "true"
+- `DOWNLOAD_LORA`: Download LoRA weights - default: "false"
+- `COMPRESS_FILES`: Compress safetensors files - default: "true"
 
-Examples (Windows cmd):
+### Environment Variables
 
-```cmd
-:: default (original sharded encoder)
-docker build -t qwen-image-edit-serverless .
+- `MODELS_DIR`: Model storage directory - default: "./models"
+- `DEFAULT_STEPS`: Default inference steps - default: 8
+- `DEFAULT_SCALE`: Default CFG scale - default: 4.0
+- `DEFAULT_RANK`: Default quantization rank - default: 128
 
-:: compact single-file encoder
-docker build --build-arg USE_ORIGINAL_TEXT_ENCODER=false -t qwen-image-edit-serverless:compact-te .
+## Model Structure
 
-:: rank 32 + lightning 8-step
-docker build --build-arg RANK=32 --build-arg LIGHTING=8 -t qwen-image-edit-serverless:r32-l8 .
 ```
-
-Resulting transformer filenames baked in the image:
-- NONE: svdq-int4_r{RANK}-qwen-image-edit.safetensors
-- 4: svdq-int4_r{RANK}-qwen-image-edit-lightningv1.0-4steps.safetensors
-- 8: svdq-int4_r{RANK}-qwen-image-edit-lightningv1.0-8steps.safetensors
-
-## Publishing to Runpod Hub
-
-- Ensure `.runpod/hub.json` and `.runpod/tests.json` are set.
-- Tag a GitHub release. The Hub indexes releases, not commits.
-
-## Notes
-
-- We use Nunchaku to load a quantized transformer from Hugging Face at build time and bake it into `/models` inside the image.
-- The container size budget is 20GB; the selected quantized artifacts fit within this budget.
-- CUDA 12.x base image with PyTorch is used for broad GPU support.
-
-## Local test script
-
-A small helper script `test_local_http_endpoint.py` posts a request to the local API (when RUNPOD_LOCAL_TEST=1 is used at container start):
-
-1) Ensure the container is running locally:
-
-```cmd
-docker run --gpus all -p 3000:3000 -e RUNPOD_LOCAL_TEST=1 qwen-image-edit-serverless
+models/
+├── diffusion_models/
+│   └── transformer.safetensors    # Nunchaku quantized transformer
+├── text_encoders/
+│   └── qwen_2.5_vl_7b_fp8_scaled.safetensors  # Optional compact text encoder
+├── loras/
+│   └── Qwen-Image-Lightning-8steps-V2.0.safetensors  # Optional LoRA weights
+└── Qwen-Image-Edit/               # Pipeline config and original text encoder
+    ├── scheduler/
+    ├── vae/
+    ├── text_encoder/
+    └── ...
 ```
-
-2) On your host, install Python requests if needed and run the test:
-
-```cmd
-python -m pip install requests
-python test_local_http_endpoint.py
-```
-
-The script reads `test_input.jpg` and writes `result.png`.
 
 ## Acknowledgments
 
-This project stands on the shoulders of fantastic open-source work:
-- Qwen-Image-Edit and the broader Qwen models by Alibaba Cloud (Qwen team)
-- Hugging Face Transformers and Diffusers
-- Nunchaku for efficient quantized transformers
-- Runpod Serverless
-- FastAPI and Uvicorn
-- PyTorch and the broader ecosystem
+- **Qwen Team** (Alibaba Cloud) - Qwen-Image-Edit model
+- **Nunchaku Team** - Quantization framework
+- **Hugging Face** - Transformers and Diffusers
+- **Runpod** - Serverless platform
+- **Community Contributors** - Model variants and optimizations
 
-## Author / Contact
+## Author
 
-Made with passion by Salvatore Rossitto.
+Enhanced by the community | Original by Salvatore Rossitto

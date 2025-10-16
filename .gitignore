@@ -1,0 +1,7 @@
+.venv
+models/.locks
+models/models--Qwen--Qwen-Image-Edit
+models/diffusion_models
+models/loras
+models/text_encoders
+models/version.txt

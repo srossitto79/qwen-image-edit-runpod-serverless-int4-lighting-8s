@@ -26,9 +26,6 @@ node_modules/
 # VSCode
 .vscode/
 
-# Model weights (we embed via Dockerfile)
-models/
-
 # Local artifacts and media not needed in image
 *.png
 *.jpg
