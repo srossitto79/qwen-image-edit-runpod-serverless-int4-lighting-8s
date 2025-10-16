@@ -3,15 +3,15 @@ torch==2.8.0 --extra-index-url https://download.pytorch.org/whl/cu128 ; sys_plat
 torchvision --extra-index-url https://download.pytorch.org/whl/cu128 
 torchaudio --extra-index-url https://download.pytorch.org/whl/cu128 
 runpod==1.7.0
-accelerate=1.10.1
+accelerate==1.10.1
 safetensors==0.6.2
 diffusers==0.35.2
 transformers==4.57.1
-huggingface-hub=0.35.3
-pillow=12.0.0
+huggingface-hub==0.35.3
+pillow==12.0.0
 numpy
 fastapi
 uvicorn[standard]
 hf_transfer
-https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.7-cp310-cp310-linux_x86_64.whl ; sys_platform == "linux"
+https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.7-cp312-cp312-linux_x86_64.whl ; sys_platform == "linux"
 https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.8-cp312-cp312-win_amd64.whl ; sys_platform == "win32"
