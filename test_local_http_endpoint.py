@@ -21,7 +21,8 @@ with open("./test_input.jpg", "rb") as f:
 payload = {
     "input": {
         "image": base64_input,
-        "prompt": "Transform this exterior space, enhancing textures and lighting. Preserve the camera angle, geometry, and composition. Enhance the vibrant colors and detailed textures of the image. Add subtle shadows and highlights to create a more realistic and immersive environment. Preserve the natural atmosphere and the ambiance.",
+        #"prompt": "Transform this exterior space, enhancing textures and lighting. Preserve the camera angle, geometry, and composition. Enhance the vibrant colors and detailed textures of the image. Add subtle shadows and highlights to create a more realistic and immersive environment. Preserve the natural atmosphere and the ambiance.",
+        "prompt": "Transform current image into a photorealistic one. Upgrade this exterior design image. Maintain architectural massing while refining materials, landscaping, and lighting to feel photorealistic. Style focus: premium-photography.",
         "num_inference_steps": 8,
         "true_cfg_scale": 4.0
     }

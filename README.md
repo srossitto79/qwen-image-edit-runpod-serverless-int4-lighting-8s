@@ -62,6 +62,22 @@ Run with FastAPI for local testing:
 docker run --gpus all -p 3000:3000 -e RUNPOD_LOCAL_TEST=1 qwen-image-edit-nunchaku
 ```
 
+Without docker (on Windows)
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+set RUNPOD_LOCAL_TEST=1 && python handler.py
+```
+
+Without docker (on linux)
+```cmd
+python -m venv .venv
+source .venv\Scripts\activate
+pip install -r requirements.txt
+export RUNPOD_LOCAL_TEST=1 && python handler.py
+```
+
 ### 3. Test the API
 
 ```cmd
