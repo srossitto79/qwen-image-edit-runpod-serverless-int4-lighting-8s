@@ -207,9 +207,17 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     width = inp.get("width")
     height = inp.get("height")
 
-    if (not image_in and not images_in) or not prompt:
-        return {"error": "Missing required fields: image, prompt"}
+    missing_fields = []
+    
+    if not prompt:
+        missing_fields.append("prompt")
 
+    if not image_in and not images_in:
+        missing_fields.append("image or images")
+
+    if missing_fields:  
+        return {"error": f"Missing required fields: {', '.join(missing_fields)}"}
+    
     start_time = time.time()
 
     print("Loading pipeline...")

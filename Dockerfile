@@ -39,11 +39,11 @@ COPY download_models.py ./
 COPY ./models/ ${MODELS_DIR}/
 
 # Install Python dependencies and Nunchaku
-RUN python3 --version \
+RUN python --version \
  && pip show torch \
- && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
- && python3 -m pip install --no-cache-dir --no-compile -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128 \
- && python3 download_models.py ${MODELS_DIR} \
+ && python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+ && python -m pip install --no-cache-dir --no-compile -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128 \
+ && python download_models.py ${MODELS_DIR} \
  && rm -rf /root/.cache/pip \
  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
  && find ${MODELS_DIR} -type d -name ".git" -exec rm -rf {} + 2>/dev/null || true \
@@ -67,4 +67,4 @@ ENV RP_HANDLER=handler \
 EXPOSE 3000
 
 # Health check and start
-CMD ["python3", "handler.py"]
+CMD ["python", "handler.py"]
