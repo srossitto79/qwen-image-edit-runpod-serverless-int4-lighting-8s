@@ -39,7 +39,9 @@ COPY download_models.py ./
 COPY ./models/ ${MODELS_DIR}/
 
 # Install Python dependencies and Nunchaku
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+RUN python3 --version \
+ && pip show torch \
+ && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
  && python3 -m pip install --no-cache-dir --no-compile -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128 \
  && python3 download_models.py ${MODELS_DIR} \
  && rm -rf /root/.cache/pip \
