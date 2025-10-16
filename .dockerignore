@@ -40,3 +40,5 @@ result*.png
 
 # Test scripts
 tests/
+
+*.md
