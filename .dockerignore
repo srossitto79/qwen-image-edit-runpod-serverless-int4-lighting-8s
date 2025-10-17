@@ -35,8 +35,6 @@ node_modules/
 test_*
 *.ipynb
 .runpod/
-pool_result_*.png
-result*.png
 
 # Test scripts
 tests/

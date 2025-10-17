@@ -24,6 +24,58 @@ from transformers import Qwen2_5_VLForConditionalGeneration, AutoConfig
 
 warnings.filterwarnings("ignore", message=".*Some weights of the model checkpoint.*were not used.*")
 
+
+def calculate_optimal_blocks_on_gpu(available_memory_gb: float, transformer_model=None) -> int:
+    """
+    Calculate optimal number of transformer blocks to keep on GPU based on available memory.
+    
+    Args:
+        available_memory_gb: Available GPU memory in GB
+        transformer_model: The transformer model to analyze (optional, for getting actual block count)
+    
+    Returns:
+        Optimal number of blocks to keep on GPU
+    """
+    # Try to get actual number of blocks from the model
+    total_blocks = 64  # Default for Qwen Image Edit
+    if transformer_model is not None:
+        try:
+            # Different ways the blocks might be accessible
+            if hasattr(transformer_model, 'transformer_blocks'):
+                total_blocks = len(transformer_model.transformer_blocks)
+            elif hasattr(transformer_model, 'blocks'):
+                total_blocks = len(transformer_model.blocks)
+            elif hasattr(transformer_model, 'config') and hasattr(transformer_model.config, 'num_layers'):
+                total_blocks = transformer_model.config.num_layers
+            print(f"Detected {total_blocks} transformer blocks in model")
+        except Exception as e:
+            print(f"Could not detect block count, using default: {e}")
+    
+    # Reserve memory for other components (VAE, text encoder, intermediate tensors, etc.)
+    reserved_memory_gb = 4.0  # Conservative estimate
+    
+    # Memory available for transformer blocks
+    available_for_blocks = max(0, available_memory_gb - reserved_memory_gb)
+    
+    # Estimate memory per block based on model type
+    # INT4 quantized models use significantly less memory than FP16/BF16
+    memory_per_block_gb = 0.15  # ~150MB per block for INT4 quantized model
+    
+    # Calculate how many blocks can fit
+    max_blocks_that_fit = int(available_for_blocks / memory_per_block_gb)
+    
+    # Don't exceed total blocks in model
+    optimal_blocks = min(max_blocks_that_fit, total_blocks)
+    
+    # Ensure at least 1 block on GPU for performance
+    optimal_blocks = max(1, optimal_blocks)
+    
+    print(f"GPU Memory: {available_memory_gb:.1f}GB, Reserved: {reserved_memory_gb:.1f}GB")
+    print(f"Available for blocks: {available_for_blocks:.1f}GB")
+    print(f"Estimated blocks that fit: {max_blocks_that_fit}, Total blocks: {total_blocks}, Using: {optimal_blocks}")
+    
+    return optimal_blocks
+
 # Model locations baked into the container at build-time
 MODELS_DIR = os.getenv("MODELS_DIR", "./models")
 MODEL_ID = "Qwen/Qwen-Image-Edit"
@@ -145,17 +197,30 @@ def load_pipeline(target_dtype: torch.dtype = torch.bfloat16) -> QwenImageEditPl
             cache_dir=MODELS_DIR
         )
 
-    # Configure memory management based on available GPU memory
+    # # Configure memory management based on available GPU memory
+    # if device == "cuda":
+    #     if get_gpu_memory() > 18:
+    #         print("Configuring standard offload for high-memory GPU...")
+    #         pipe_local.enable_model_cpu_offload()
+    #     else:
+    #         print("Configuring Nunchaku offload for low-memory GPU...")
+    #         transformer.set_offload(True, use_pin_memory=False, num_blocks_on_gpu=1)
+    #         pipe_local._exclude_from_cpu_offload.append("transformer")
+    #         pipe_local.enable_sequential_cpu_offload()
     if device == "cuda":
-        if get_gpu_memory() > 18:
+        gpu_memory = get_gpu_memory()
+        if gpu_memory > 18:
             print("Configuring standard offload for high-memory GPU...")
-            pipe_local.enable_model_cpu_offload()
+            pipe_local.to("cuda")
         else:
-            print("Configuring Nunchaku offload for low-memory GPU...")
-            transformer.set_offload(True, use_pin_memory=False, num_blocks_on_gpu=1)
+            # Calculate optimal number of blocks based on available GPU memory
+            optimal_blocks = calculate_optimal_blocks_on_gpu(gpu_memory, transformer)
+            print(f"Configuring Nunchaku offload for low-memory GPU (using {optimal_blocks} blocks)...")
+            transformer.set_offload(True, use_pin_memory=False, num_blocks_on_gpu=optimal_blocks)
             pipe_local._exclude_from_cpu_offload.append("transformer")
             pipe_local.enable_sequential_cpu_offload()
-    
+            #pipe_local.enable_model_cpu_offload()
+
     pipe_local.set_progress_bar_config(disable=None)
     pipe = pipe_local
 
