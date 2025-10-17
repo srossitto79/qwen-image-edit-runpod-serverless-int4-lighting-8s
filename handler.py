@@ -78,8 +78,9 @@ def calculate_optimal_blocks_on_gpu(available_memory_gb: float, transformer_mode
 
 # Model locations baked into the container at build-time
 MODELS_DIR = os.getenv("MODELS_DIR", "./models")
-MODEL_ID = "Qwen/Qwen-Image-Edit"
-TRANSFORMER_PATH = os.path.join(MODELS_DIR, "diffusion_models", "transformer.safetensors")  # nunchaku quantized
+MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen-Image-Edit-2509")
+TRANSFORMER_NAME = os.getenv("TRANSFORMER_NAME", "nunchaku-qwen-image-edit-2509")
+TRANSFORMER_PATH = os.path.join(MODELS_DIR, "diffusion_models", f"{TRANSFORMER_NAME}.safetensors")  # nunchaku quantized
 
 # Configuration options
 USE_ORIGINAL_TEXT_ENCODER = os.getenv("USE_ORIGINAL_TEXT_ENCODER", "true").lower() in ("true", "1", "yes")

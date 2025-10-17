@@ -5,3 +5,4 @@ models/diffusion_models
 models/loras
 models/text_encoders
 models/version.txt
+models/models--Qwen--Qwen-Image-Edit-2509/**

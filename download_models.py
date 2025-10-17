@@ -7,7 +7,7 @@ import shutil
 from huggingface_hub import snapshot_download, hf_hub_download
 
 
-def assure_pipeline_files(model_id: str = "Qwen/Qwen-Image-Edit", cache_dir: str = None, use_original_text_encoder: bool = True):
+def assure_pipeline_files(model_id: str = "Qwen/Qwen-Image-Edit-2509", cache_dir: str = None, use_original_text_encoder: bool = True):
     """
     Download only the small config files from the HF repo.
     Avoids downloading large model weights since we use local Nunchaku files.
@@ -66,7 +66,7 @@ def assure_pipeline_files(model_id: str = "Qwen/Qwen-Image-Edit", cache_dir: str
 
 def download_nunchaku_transformer(
     output_path: str,
-    repo_id: str = "nunchaku-tech/nunchaku-qwen-image-edit",
+    repo_id: str = "nunchaku-tech/nunchaku-qwen-image-edit-2509",
     rank: int = 128,
     lighting_steps: str = "8"
 ):
@@ -87,11 +87,11 @@ def download_nunchaku_transformer(
 
     # Determine filename based on rank and lighting
     if lighting_steps == "8":
-        filename = f"svdq-int4_r{rank}-qwen-image-edit-lightningv1.0-8steps.safetensors"
+        filename = f"svdq-int4_r{rank}-qwen-image-edit-2509-lightningv2.0-8steps.safetensors"
     elif lighting_steps == "4":
-        filename = f"svdq-int4_r{rank}-qwen-image-edit-lightningv1.0-4steps.safetensors"
+        filename = f"svdq-int4_r{rank}-qwen-image-edit-2509-lightningv2.0-4steps.safetensors"
     else:
-        filename = f"svdq-int4_r{rank}-qwen-image-edit.safetensors"
+        filename = f"svdq-int4_r{rank}-qwen-image-edit-2509.safetensors"
 
     print(f"Downloading file: {filename}")
 
@@ -105,7 +105,7 @@ def download_nunchaku_transformer(
     )
 
     # Rename to consistent name
-    final_path = os.path.join(os.path.dirname(output_path), "transformer.safetensors")
+    final_path = os.path.join(os.path.dirname(output_path), repo_id.split("/")[-1] + ".safetensors")
     if downloaded_path != final_path:
         shutil.move(downloaded_path, final_path)
 
@@ -205,6 +205,8 @@ def compress_safetensors(file_path: str):
 
 
 def download_all_models(
+    model_id: str = "Qwen/Qwen-Image-Edit-2509",
+    nunchaku_repo_id: str = "nunchaku-tech/nunchaku-qwen-image-edit-2509",
     models_dir: str = "/models", 
     rank: int = 128, 
     lighting_steps: str = "8",
@@ -233,12 +235,12 @@ def download_all_models(
 
     # Always download pipeline configs (small files, ensures correct setup)
     print("1. Ensuring pipeline config files...")
-    assure_pipeline_files(cache_dir=models_dir, use_original_text_encoder=use_original_text_encoder)
+    assure_pipeline_files(cache_dir=models_dir, use_original_text_encoder=use_original_text_encoder, model_id=model_id)
 
     # Download Nunchaku transformer (skips if exists)
     print("\n2. Checking Nunchaku transformer model...")
-    transformer_path = os.path.join(models_dir, "diffusion_models", "transformer.safetensors")
-    download_nunchaku_transformer(transformer_path, rank=rank, lighting_steps=lighting_steps)
+    transformer_path = os.path.join(models_dir, "diffusion_models", nunchaku_repo_id.split("/")[-1] + ".safetensors")
+    download_nunchaku_transformer(transformer_path, rank=rank, lighting_steps=lighting_steps, repo_id=nunchaku_repo_id)
 
     # Download compact text encoder if not using original
     if not use_original_text_encoder:
@@ -276,10 +278,14 @@ if __name__ == "__main__":
     rank = int(os.getenv("RANK", "128"))
     lighting_steps = os.getenv("LIGHTING", "8")
     use_original_te = os.getenv("USE_ORIGINAL_TEXT_ENCODER", "true").lower() in ("true", "1", "yes")
+    model_id = os.getenv("MODEL_ID", "Qwen/Qwen-Image-Edit-2509")
+    nunchaku_repo_id = "nunchaku-tech/nunchaku-qwen-image-edit-2509"
 
     download_all_models(
         models_dir=models_dir,
         rank=rank,
         lighting_steps=lighting_steps,
-        use_original_text_encoder=use_original_te
+        use_original_text_encoder=use_original_te,
+        model_id=model_id,
+        nunchaku_repo_id=nunchaku_repo_id
     )

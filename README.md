@@ -13,7 +13,7 @@ This repository packages a Runpod Serverless worker that performs image editing 
 
 ## Features
 
-- **Model**: Qwen/Qwen-Image-Edit (Diffusers pipeline) + Nunchaku quantized transformer (INT4, configurable rank)
+- **Model**: Qwen/Qwen-Image-Edit-2509 (Diffusers pipeline) + Nunchaku quantized transformer (INT4, configurable rank)
 - **Text Encoder Options**: Original full-precision or compact FP8 quantized
 - **Lightning Support**: 4-step and 8-step variants for faster inference
 - **Memory Management**: Intelligent GPU memory management with offloading
